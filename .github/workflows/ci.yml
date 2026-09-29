@@ -1,0 +1,46 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env: { POSTGRES_USER: orchestrator, POSTGRES_PASSWORD: orchestrator, POSTGRES_DB: orchestrator_test }
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U orchestrator" --health-interval 2s --health-timeout 2s --health-retries 20
+    env:
+      DATABASE_URL: postgres://orchestrator:orchestrator@localhost:5432/orchestrator_test
+      TEST_DATABASE_URL: postgres://orchestrator:orchestrator@localhost:5432/orchestrator_test
+      TEST_TEMPORAL_ADDRESS: localhost:7233
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10.34.5 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: pnpm }
+      - uses: actions/setup-go@v5
+        with: { go-version: '1.27', cache-dependency-path: backend/go.sum }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:migrate
+      - name: Start Temporal for workflow integration
+        run: |
+          docker run -d --name temporal-test --restart on-failure:3 \
+            --add-host=host.docker.internal:host-gateway \
+            -e DB=postgres12 -e DB_PORT=5432 \
+            -e POSTGRES_SEEDS=host.docker.internal \
+            -e POSTGRES_USER=orchestrator -e POSTGRES_PWD=orchestrator \
+            -e DBNAME=temporal -e VISIBILITY_DBNAME=temporal_visibility \
+            -p 127.0.0.1:7233:7233 temporalio/auto-setup:1.27.2
+          for attempt in $(seq 1 60); do
+            if docker exec temporal-test sh -c 'temporal operator cluster health --address "$(hostname -i):7233"' >/dev/null 2>&1; then exit 0; fi
+            sleep 2
+          done
+          docker logs temporal-test
+          exit 1
+      - run: pnpm content:check
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: cd backend && go vet ./...
+      - run: pnpm --filter @orchestrator/mobile build

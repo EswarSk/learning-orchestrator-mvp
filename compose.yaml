@@ -1,0 +1,145 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: orchestrator
+      POSTGRES_PASSWORD: orchestrator
+      POSTGRES_DB: orchestrator
+    ports:
+      - "127.0.0.1:54322:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U orchestrator"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+    volumes:
+      - orchestrator-db:/var/lib/postgresql/data
+  temporal:
+    image: temporalio/auto-setup:1.27.2
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_SEEDS: postgres
+      POSTGRES_USER: orchestrator
+      POSTGRES_PWD: orchestrator
+      DBNAME: temporal
+      VISIBILITY_DBNAME: temporal_visibility
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:7233:7233"
+    restart: on-failure
+  migrate:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      args:
+        SERVICE: migrate
+    environment:
+      DATABASE_URL: postgres://orchestrator:orchestrator@postgres:5432/orchestrator
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+  experience:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      args:
+        SERVICE: experience
+    environment:
+      APP_ENV: local
+      PUSH_ENABLED: ${PUSH_ENABLED:-false}
+      DATABASE_URL: postgres://orchestrator:orchestrator@postgres:5432/orchestrator
+      INTERNAL_TOKEN: local-internal-token-change-in-production
+      LEARNING_URL: http://learning:3001
+      CONTEXT_URL: http://context:3002
+      OPPORTUNITY_URL: http://opportunity:3003
+      LISTEN_ADDR: :3000
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:3000:3000"
+    restart: on-failure
+  learning:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      args:
+        SERVICE: learning
+    environment:
+      APP_ENV: local
+      DATABASE_URL: postgres://orchestrator:orchestrator@postgres:5432/orchestrator
+      INTERNAL_TOKEN: local-internal-token-change-in-production
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-6-astra}
+      ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
+      ELEVENLABS_VOICE_ID: ${ELEVENLABS_VOICE_ID:-}
+      CONTENT_DIR: /content
+      LISTEN_ADDR: :3001
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: on-failure
+  context:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      args:
+        SERVICE: context
+    environment:
+      APP_ENV: local
+      DATABASE_URL: postgres://orchestrator:orchestrator@postgres:5432/orchestrator
+      INTERNAL_TOKEN: local-internal-token-change-in-production
+      EXPERIENCE_URL: http://experience:3000
+      OPPORTUNITY_URL: http://opportunity:3003
+      TEMPORAL_ADDRESS: temporal:7233
+      OPPORTUNITY_DELAY_SECONDS: 2
+      LISTEN_ADDR: :3002
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      temporal:
+        condition: service_started
+    restart: on-failure
+  opportunity:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      args:
+        SERVICE: opportunity
+    environment:
+      APP_ENV: local
+      DATABASE_URL: postgres://orchestrator:orchestrator@postgres:5432/orchestrator
+      INTERNAL_TOKEN: local-internal-token-change-in-production
+      LISTEN_ADDR: :3003
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: on-failure
+  opportunity-worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      args:
+        SERVICE: opportunity-worker
+    environment:
+      APP_ENV: local
+      DATABASE_URL: postgres://orchestrator:orchestrator@postgres:5432/orchestrator
+      PUSH_ENABLED: ${PUSH_ENABLED:-false}
+      INTERNAL_TOKEN: local-internal-token-change-in-production
+      EXPERIENCE_URL: http://experience:3000
+      CONTEXT_URL: http://context:3002
+      LEARNING_URL: http://learning:3001
+      TEMPORAL_ADDRESS: temporal:7233
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      temporal:
+        condition: service_started
+    restart: on-failure
+
+volumes:
+  orchestrator-db:

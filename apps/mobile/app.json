@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "Learning Orchestrator",
+    "slug": "learning-orchestrator",
+    "scheme": "pausa",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.example.pausaspanish",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Use nearby approved places to suggest optional learning practice.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Allow optional practice suggestions near your selected places, even when the app is closed.",
+        "NSMicrophoneUsageDescription": "Use your microphone only when you start spoken practice.",
+        "NSCalendarsUsageDescription": "Choose calendars whose availability Orbit may read. Orbit never edits events.",
+        "NSCalendarsFullAccessUsageDescription": "Choose calendars whose availability Orbit may read. Orbit never edits events.",
+        "UIBackgroundModes": ["location", "remote-notification"]
+      }
+    },
+    "plugins": [
+      "expo-router",
+      ["expo-audio", {"microphonePermission": "Use your microphone only when you start spoken practice."}],
+      "expo-secure-store",
+      ["expo-location", {"locationAlwaysAndWhenInUsePermission":"Allow optional practice suggestions near your selected places."}],
+      ["expo-notifications", {"sounds":[]}],
+      "@config-plugins/react-native-webrtc"
+    ],
+    "experiments": { "typedRoutes": true },
+    "runtimeVersion": { "policy": "appVersion" }
+  }
+}

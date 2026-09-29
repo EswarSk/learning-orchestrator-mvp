@@ -1,0 +1,26 @@
+{
+  "name": "learning-orchestrator-mvp",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.34.5",
+  "engines": { "node": ">=24 <27" },
+  "scripts": {
+    "build": "cd backend && go build ./...",
+    "dev:api": "docker compose up -d --build",
+    "dev:worker": "docker compose up -d --build opportunity-worker",
+    "dev:mobile": "pnpm --filter @orchestrator/mobile start",
+    "typecheck": "pnpm --filter @orchestrator/mobile typecheck",
+    "test": "cd backend && go test ./...",
+    "test:integration": "cd backend && go test ./... -tags=integration",
+    "content:check": "tsx scripts/validate-content.ts",
+    "db:migrate": "cd backend && go run ./cmd/migrate"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.2",
+    "tsx": "4.23.15",
+    "typescript": "6.0.3",
+    "vitest": "4.0.18",
+    "zod": "4.6.5"
+  }
+}
